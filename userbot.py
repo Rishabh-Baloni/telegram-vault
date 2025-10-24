@@ -116,31 +116,39 @@ def main():
         # Start health check server for Render
         start_health_server()
         
-        # Restore session from environment or download URL
-        session_base64 = os.environ.get('SESSION_STRING')
-        session_url = os.environ.get('SESSION_URL')
+        # Restore session from environment (supports chunked session for large files)
+        import base64
         
-        if session_url:
-            # Download session from URL (e.g., GitHub raw file, Dropbox, etc.)
-            import urllib.request
+        # Try to get session from chunks first (for large sessions)
+        session_parts = []
+        for i in range(1, 11):  # Support up to 10 chunks
+            part = os.environ.get(f'SESSION_PART{i}')
+            if part:
+                session_parts.append(part)
+            else:
+                break
+        
+        if session_parts:
+            # Combine all chunks
             try:
-                logger.info("Downloading session from URL...")
-                with urllib.request.urlopen(session_url) as response:
-                    session_data = response.read()
-                with open("vault_userbot.session", "wb") as f:
-                    f.write(session_data)
-                logger.info("✓ Session downloaded from URL")
-            except Exception as e:
-                logger.warning(f"Could not download session: {e}")
-        elif session_base64:
-            import base64
-            try:
+                session_base64 = ''.join(session_parts)
                 session_data = base64.b64decode(session_base64)
                 with open("vault_userbot.session", "wb") as f:
                     f.write(session_data)
-                logger.info("✓ Session restored from environment variable")
+                logger.info(f"✓ Session restored from {len(session_parts)} chunks")
             except Exception as e:
-                logger.warning(f"Could not restore session: {e}")
+                logger.warning(f"Could not restore chunked session: {e}")
+        else:
+            # Try single SESSION_STRING (for backwards compatibility)
+            session_base64 = os.environ.get('SESSION_STRING')
+            if session_base64:
+                try:
+                    session_data = base64.b64decode(session_base64)
+                    with open("vault_userbot.session", "wb") as f:
+                        f.write(session_data)
+                    logger.info("✓ Session restored from environment variable")
+                except Exception as e:
+                    logger.warning(f"Could not restore session: {e}")
         
         # Validate configuration
         Config.validate()
