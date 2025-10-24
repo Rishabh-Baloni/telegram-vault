@@ -111,6 +111,18 @@ def main():
         # Start health check server for Render
         start_health_server()
         
+        # Restore session from environment if available
+        session_base64 = os.environ.get('SESSION_STRING')
+        if session_base64:
+            import base64
+            try:
+                session_data = base64.b64decode(session_base64)
+                with open("vault_userbot.session", "wb") as f:
+                    f.write(session_data)
+                logger.info("✓ Session restored from environment variable")
+            except Exception as e:
+                logger.warning(f"Could not restore session: {e}")
+        
         # Validate configuration
         Config.validate()
         logger.info("✓ Configuration validated successfully")
