@@ -3,6 +3,7 @@ Telegram Vault Userbot - User Mode
 Monitors all groups using your personal Telegram account
 """
 import logging
+import os
 from pyrogram import Client, filters
 from pyrogram.types import Message
 from config import Config
@@ -17,6 +18,29 @@ logger = logging.getLogger(__name__)
 # Suppress Pyrogram and asyncio errors for unknown peers
 logging.getLogger("pyrogram").setLevel(logging.WARNING)
 logging.getLogger("asyncio").setLevel(logging.WARNING)
+
+# Keep alive for Render (optional health check)
+PORT = int(os.environ.get('PORT', 10000))
+
+def start_health_server():
+    """Start a simple HTTP server for Render health checks"""
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    import threading
+    
+    class HealthHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-type', 'text/plain')
+            self.end_headers()
+            self.wfile.write(b'Bot is running!')
+        
+        def log_message(self, format, *args):
+            pass  # Suppress HTTP logs
+    
+    server = HTTPServer(('0.0.0.0', PORT), HealthHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    logger.info(f"Health check server running on port {PORT}")
 
 
 async def message_handler(client: Client, message: Message):
@@ -84,6 +108,9 @@ def main():
     Start the userbot
     """
     try:
+        # Start health check server for Render
+        start_health_server()
+        
         # Validate configuration
         Config.validate()
         logger.info("✓ Configuration validated successfully")
