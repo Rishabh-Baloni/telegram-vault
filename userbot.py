@@ -4,8 +4,10 @@ Monitors all groups using your personal Telegram account
 """
 import logging
 import os
+import asyncio
 from pyrogram import Client, filters
 from pyrogram.types import Message
+from pyrogram.enums import ChatType
 from config import Config
 
 # Configure logging
@@ -21,6 +23,12 @@ logging.getLogger("asyncio").setLevel(logging.WARNING)
 
 # Keep alive for Render (optional health check)
 PORT = int(os.environ.get('PORT', 10000))
+
+# Track last seen message ID for each channel (for polling)
+last_message_ids = {}
+
+# Polling interval in seconds (3 minutes)
+POLL_INTERVAL = 180
 
 def start_health_server():
     """Start a simple HTTP server for Render health checks"""
@@ -108,6 +116,87 @@ async def message_handler(client: Client, message: Message):
         logger.error(f"Error in message_handler: {str(e)}")
 
 
+async def poll_channels(client: Client):
+    """
+    Background task to poll channels for new messages
+    Channels don't send real-time updates to regular subscribers, so we poll them periodically
+    """
+    global last_message_ids
+    
+    # Wait for client to be fully ready
+    await asyncio.sleep(10)
+    
+    logger.info("🔄 Starting channel polling task...")
+    logger.info(f"⏱️  Checking channels every {POLL_INTERVAL} seconds")
+    
+    while True:
+        try:
+            for channel_id in Config.TARGET_CHANNEL_IDS:
+                # Skip @username entries (handle them separately if needed)
+                if isinstance(channel_id, str):
+                    continue
+                
+                try:
+                    # Check if this is actually a channel (not a supergroup)
+                    chat = await client.get_chat(channel_id)
+                    
+                    # Skip supergroups - they get real-time updates
+                    if chat.type == ChatType.SUPERGROUP:
+                        continue
+                    
+                    # Get the latest message
+                    messages = []
+                    async for msg in client.get_chat_history(channel_id, limit=10):
+                        messages.append(msg)
+                    
+                    if not messages:
+                        continue
+                    
+                    # First time seeing this channel - just record the latest message ID
+                    if channel_id not in last_message_ids:
+                        last_message_ids[channel_id] = messages[0].id
+                        logger.info(f"📌 Tracking {chat.title}: last message ID = {messages[0].id}")
+                        continue
+                    
+                    # Check for new messages (messages are in reverse chronological order)
+                    new_messages = []
+                    for msg in reversed(messages):
+                        if msg.id > last_message_ids[channel_id]:
+                            new_messages.append(msg)
+                    
+                    # Forward new messages
+                    if new_messages:
+                        last_message_ids[channel_id] = messages[0].id
+                        
+                        for msg in new_messages:
+                            try:
+                                # Skip edited messages
+                                if msg.edit_date:
+                                    continue
+                                
+                                vault_id = int(Config.VAULT_CHAT_ID)
+                                await msg.forward(vault_id)
+                                
+                                logger.info(
+                                    f"✅ [POLL] Forwarded message {msg.id} from {chat.title} to vault"
+                                )
+                            except Exception as e:
+                                logger.error(f"❌ Failed to forward polled message: {str(e)}")
+                    
+                except Exception as e:
+                    logger.warning(f"⚠️  Error polling channel {channel_id}: {str(e)}")
+                    continue
+                
+                # Small delay between channels to avoid rate limits
+                await asyncio.sleep(2)
+            
+        except Exception as e:
+            logger.error(f"Error in polling task: {str(e)}")
+        
+        # Wait before next poll cycle
+        await asyncio.sleep(POLL_INTERVAL)
+
+
 def main():
     """
     Start the userbot
@@ -190,8 +279,11 @@ def main():
         logger.info("⏳ Running in USER MODE...")
         logger.info("💡 This will monitor ALL groups you're a member of")
         
-        # Keep client running
+        # Start background polling task for channels
         from pyrogram import idle
+        app.loop.create_task(poll_channels(app))
+        
+        # Keep client running
         idle()
         
     except ValueError as e:

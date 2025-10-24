@@ -10,8 +10,13 @@ ENV/
 *.session
 *.session-journal
 
-# Project rules (keep private)
+# Personal/Sensitive files
 RULES.txt
+MONITORED_TARGETS.txt
+RENDER_ENV_VARIABLES.txt
+SESSION_PART*.txt
+SESSION_STRING.txt
+ALL_SESSIONS.txt
 
 # Python
 __pycache__/
