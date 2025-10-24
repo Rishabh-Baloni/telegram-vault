@@ -162,6 +162,17 @@ def main():
             phone_number=Config.PHONE_NUMBER
         )
         
+        # Start client first
+        app.start()
+        
+        # Cache vault channel on startup to prevent "Peer id invalid" errors
+        try:
+            logger.info("🔄 Caching vault channel...")
+            vault_chat = app.get_chat(Config.VAULT_CHAT_ID)
+            logger.info(f"✓ Vault cached: {vault_chat.title if vault_chat.title else 'Saved Messages'}")
+        except Exception as e:
+            logger.warning(f"⚠️  Could not cache vault: {e}")
+        
         # Register message handler for all incoming messages
         @app.on_message(filters.all)
         async def handle_message(client, message):
@@ -179,8 +190,9 @@ def main():
         logger.info("⏳ Running in USER MODE...")
         logger.info("💡 This will monitor ALL groups you're a member of")
         
-        # Run the client
-        app.run()
+        # Keep client running
+        from pyrogram import idle
+        idle()
         
     except ValueError as e:
         logger.error(f"Configuration error: {str(e)}")
