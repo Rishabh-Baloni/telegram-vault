@@ -176,29 +176,9 @@ def main():
         # Register message handler for all incoming messages
         @app.on_message(filters.all)
         async def handle_message(client, message):
-            # Quick debug log for every incoming message to help diagnose missed forwards
-            try:
-                chat_id = message.chat.id if message.chat else None
-            except Exception:
-                chat_id = None
-
-            try:
-                sender_chat_id = message.sender_chat.id if message.sender_chat else None
-            except Exception:
-                sender_chat_id = None
-
-            try:
-                from_user_id = message.from_user.id if message.from_user else None
-            except Exception:
-                from_user_id = None
-
-            # Log a short summary for debugging (do not include full message text)
-            logger.debug(f"Incoming message summary - chat_id={chat_id} sender_chat_id={sender_chat_id} from_user_id={from_user_id} message_id={getattr(message, 'id', None)}")
-
             # Skip edited messages
             if message.edit_date:
                 return
-
             await message_handler(client, message)
         
         logger.info("👤 Telegram Vault Userbot started successfully!")
