@@ -116,9 +116,23 @@ def main():
         # Start health check server for Render
         start_health_server()
         
-        # Restore session from environment if available
+        # Restore session from environment or download URL
         session_base64 = os.environ.get('SESSION_STRING')
-        if session_base64:
+        session_url = os.environ.get('SESSION_URL')
+        
+        if session_url:
+            # Download session from URL (e.g., GitHub raw file, Dropbox, etc.)
+            import urllib.request
+            try:
+                logger.info("Downloading session from URL...")
+                with urllib.request.urlopen(session_url) as response:
+                    session_data = response.read()
+                with open("vault_userbot.session", "wb") as f:
+                    f.write(session_data)
+                logger.info("✓ Session downloaded from URL")
+            except Exception as e:
+                logger.warning(f"Could not download session: {e}")
+        elif session_base64:
             import base64
             try:
                 session_data = base64.b64decode(session_base64)
