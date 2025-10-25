@@ -65,8 +65,19 @@ async def message_handler(client: Client, message: Message):
         should_forward = False
         source_info = ""
         
-        # Check 1: Regular user message
-        if message.from_user:
+        # Check 1: Message from a target channel/group (regardless of sender)
+        if message.chat.id in Config.TARGET_CHANNEL_IDS:
+            should_forward = True
+            chat_title = message.chat.title or message.chat.username or "Unknown"
+            sender = ""
+            if message.from_user:
+                sender = f"{message.from_user.username or message.from_user.first_name}"
+            elif message.sender_chat:
+                sender = f"{message.sender_chat.title or message.sender_chat.username}"
+            source_info = f"Group/Channel: {chat_title} (ID: {message.chat.id}) | Sender: {sender}"
+        
+        # Check 2: Regular user message (from target user)
+        elif message.from_user:
             user_id = message.from_user.id
             user_name = message.from_user.username or message.from_user.first_name
             chat_title = message.chat.title if message.chat else "Private Chat"
@@ -76,7 +87,7 @@ async def message_handler(client: Client, message: Message):
                 should_forward = True
                 source_info = f"User: {user_name} (ID: {user_id}) | Chat: {chat_title}"
         
-        # Check 2: Anonymous admin or channel message (sender_chat)
+        # Check 3: Anonymous admin or channel message (sender_chat)
         elif message.sender_chat:
             sender_chat_id = message.sender_chat.id
             sender_chat_title = message.sender_chat.title or message.sender_chat.username or "Unknown"
