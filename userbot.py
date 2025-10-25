@@ -61,6 +61,7 @@ async def message_handler(client: Client, message: Message):
     Handle incoming messages and forward if from target user, channel, or anonymous admin
     """
     try:
+        logger.debug(f"🔍 Checking message {message.id} from chat {message.chat.id}")
         should_forward = False
         source_info = ""
         
@@ -346,8 +347,18 @@ def main():
         # Register message handler BEFORE starting client
         @app.on_message(filters.all)
         async def handle_message(client, message):
+            # Log every message received
+            try:
+                chat_info = f"Chat: {message.chat.id}"
+                from_info = f"From: {message.from_user.id if message.from_user else 'None'}"
+                text_preview = message.text[:30] if message.text else '[Media]'
+                logger.info(f"📨 Message received | {chat_info} | {from_info} | {text_preview}")
+            except:
+                pass
+            
             # Skip edited messages
             if message.edit_date:
+                logger.info("⏭️  Skipped: edited message")
                 return
             await message_handler(client, message)
         
