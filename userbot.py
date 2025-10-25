@@ -252,9 +252,7 @@ async def poll_channels(client: Client):
                         if msg.id > last_message_ids[channel_id]:
                             new_messages.append(msg)
                     
-                    if new_messages:
-                        logger.info(f"📬 Found {len(new_messages)} new message(s) in {chat.title}")
-                    
+                    logger.info(f"� Checked {chat.title}: {len(new_messages)} new message(s)")
                     # Forward new messages
                     if new_messages:
                         last_message_ids[channel_id] = messages[0].id
@@ -336,7 +334,17 @@ def main():
                     f.write(session_data)
                 logger.info(f"✓ Session restored from {len(session_parts)} chunks")
             except Exception as e:
-                logger.warning(f"Could not restore chunked session: {e}")
+                elif "MESSAGE_ID_INVALID" in str(forward_error):
+                    text = msg.text or msg.caption or "[Media - message id invalid]"
+                    await client.send_message(
+                        vault_id,
+                        f"📋 From: {chat.title}\n"
+                        f"🆔 Channel: {channel_id} | Msg: {msg.id}\n"
+                        f"📅 {msg.date}\n\n{text}"
+                    )
+                    logger.info(
+                        f"✅ [POLL] Copied message {msg.id} from {chat.title} (MESSAGE_ID_INVALID)"
+                    )
         else:
             # Try single SESSION_STRING (for backwards compatibility)
             session_base64 = os.environ.get('SESSION_STRING')
