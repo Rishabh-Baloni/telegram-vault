@@ -213,6 +213,7 @@ async def poll_channels(client: Client):
     
     while True:
         try:
+            logger.info("🔄 Starting poll cycle...")
             for channel_id in Config.TARGET_CHANNEL_IDS:
                 # Skip @username entries (handle them separately if needed)
                 if isinstance(channel_id, str):
@@ -221,6 +222,8 @@ async def poll_channels(client: Client):
                 try:
                     # Check if this is actually a channel (not a supergroup)
                     chat = await client.get_chat(channel_id)
+                    
+                    logger.debug(f"  Checking {chat.title} (ID: {channel_id}, Type: {chat.type})")
                     
                     # Skip supergroups - they get real-time updates
                     if chat.type == ChatType.SUPERGROUP:
@@ -248,6 +251,9 @@ async def poll_channels(client: Client):
                     for msg in reversed(messages):
                         if msg.id > last_message_ids[channel_id]:
                             new_messages.append(msg)
+                    
+                    if new_messages:
+                        logger.info(f"📬 Found {len(new_messages)} new message(s) in {chat.title}")
                     
                     # Forward new messages
                     if new_messages:
