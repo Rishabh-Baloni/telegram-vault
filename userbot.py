@@ -116,6 +116,72 @@ async def message_handler(client: Client, message: Message):
         logger.error(f"Error in message_handler: {str(e)}")
 
 
+async def initialize_last_message_ids(client: Client):
+    """
+    Initialize last_message_ids by reading vault to find last forwarded message from each channel
+    This allows the bot to survive restarts without missing messages
+    """
+    global last_message_ids
+    
+    logger.info("🔍 Initializing last message IDs from vault...")
+    
+    try:
+        vault_id = int(Config.VAULT_CHAT_ID)
+        
+        # Check last 100 messages in vault to find latest from each channel
+        async for msg in client.get_chat_history(vault_id, limit=100):
+            # Check forwarded messages
+            if msg.forward_from_chat:
+                source_chat_id = msg.forward_from_chat.id
+                if msg.forward_from_message_id and source_chat_id not in last_message_ids:
+                    last_message_ids[source_chat_id] = msg.forward_from_message_id
+                    logger.info(f"   📌 {msg.forward_from_chat.title}: last forwarded ID = {msg.forward_from_message_id}")
+            
+            # Check copied messages (for forward-restricted channels)
+            elif msg.text and "🆔 Channel:" in msg.text and "| Msg:" in msg.text:
+                try:
+                    # Parse: "🆔 Channel: -1002083547614 | Msg: 1942"
+                    lines = msg.text.split('\n')
+                    for line in lines:
+                        if "🆔 Channel:" in line:
+                            parts = line.split('|')
+                            channel_part = parts[0].replace("🆔 Channel:", "").strip()
+                            msg_part = parts[1].replace("Msg:", "").strip()
+                            
+                            source_chat_id = int(channel_part)
+                            message_id = int(msg_part)
+                            
+                            if source_chat_id not in last_message_ids:
+                                last_message_ids[source_chat_id] = message_id
+                                logger.info(f"   📌 Copied message from {source_chat_id}: last ID = {message_id}")
+                            break
+                except:
+                    pass
+        
+        # For channels not in vault yet (or forward-restricted), get their current latest
+        for channel_id in Config.TARGET_CHANNEL_IDS:
+            if isinstance(channel_id, str) or channel_id in last_message_ids:
+                continue
+            
+            try:
+                chat = await client.get_chat(channel_id)
+                if chat.type == ChatType.SUPERGROUP:
+                    continue
+                
+                # Get latest message ID
+                async for msg in client.get_chat_history(channel_id, limit=1):
+                    last_message_ids[channel_id] = msg.id
+                    logger.info(f"   📌 {chat.title}: initialized at current ID = {msg.id}")
+                    break
+            except:
+                pass
+        
+        logger.info(f"✅ Initialized tracking for {len(last_message_ids)} channels")
+        
+    except Exception as e:
+        logger.error(f"⚠️  Error initializing from vault: {e}")
+
+
 async def poll_channels(client: Client):
     """
     Background task to poll channels for new messages
@@ -127,6 +193,10 @@ async def poll_channels(client: Client):
     await asyncio.sleep(10)
     
     logger.info("🔄 Starting channel polling task...")
+    
+    # Initialize by reading vault to find last forwarded messages
+    await initialize_last_message_ids(client)
+    
     logger.info(f"⏱️  Checking channels every {POLL_INTERVAL} seconds")
     
     while True:
@@ -144,7 +214,7 @@ async def poll_channels(client: Client):
                     if chat.type == ChatType.SUPERGROUP:
                         continue
                     
-                    # Get the latest message
+                    # Get the latest messages
                     messages = []
                     async for msg in client.get_chat_history(channel_id, limit=10):
                         messages.append(msg)
@@ -152,11 +222,14 @@ async def poll_channels(client: Client):
                     if not messages:
                         continue
                     
-                    # First time seeing this channel - just record the latest message ID
+                    # If not initialized from vault, start from 10 messages back to catch recent ones
                     if channel_id not in last_message_ids:
-                        last_message_ids[channel_id] = messages[0].id
-                        logger.info(f"📌 Tracking {chat.title}: last message ID = {messages[0].id}")
-                        continue
+                        # Start from 10 messages back (or earliest available)
+                        start_id = messages[min(9, len(messages)-1)].id if len(messages) > 1 else messages[0].id
+                        last_message_ids[channel_id] = start_id - 1  # Subtract 1 so we forward the last 10
+                        logger.info(f"📌 New channel tracked: {chat.title} (will catch up from ID {start_id})")
+                        # Don't continue - let it forward the messages in this cycle
+                        pass
                     
                     # Check for new messages (messages are in reverse chronological order)
                     new_messages = []
@@ -175,11 +248,30 @@ async def poll_channels(client: Client):
                                     continue
                                 
                                 vault_id = int(Config.VAULT_CHAT_ID)
-                                await msg.forward(vault_id)
                                 
-                                logger.info(
-                                    f"✅ [POLL] Forwarded message {msg.id} from {chat.title} to vault"
-                                )
+                                try:
+                                    # Try to forward first
+                                    await msg.forward(vault_id)
+                                    logger.info(
+                                        f"✅ [POLL] Forwarded message {msg.id} from {chat.title} to vault"
+                                    )
+                                except Exception as forward_error:
+                                    # If forward fails (restricted), send as text copy instead
+                                    if "FORWARDS_RESTRICTED" in str(forward_error) or "CHAT_FORWARDS_RESTRICTED" in str(forward_error):
+                                        text = msg.text or msg.caption or "[Media - forwarding restricted]"
+                                        # Include channel ID and message ID in the copy for tracking
+                                        await client.send_message(
+                                            vault_id,
+                                            f"📋 From: {chat.title}\n"
+                                            f"🆔 Channel: {channel_id} | Msg: {msg.id}\n"
+                                            f"📅 {msg.date}\n\n{text}"
+                                        )
+                                        logger.info(
+                                            f"✅ [POLL] Copied message {msg.id} from {chat.title} (forward restricted)"
+                                        )
+                                    else:
+                                        raise  # Re-raise if it's a different error
+                                
                             except Exception as e:
                                 logger.error(f"❌ Failed to forward polled message: {str(e)}")
                     
@@ -251,7 +343,15 @@ def main():
             phone_number=Config.PHONE_NUMBER
         )
         
-        # Start client first
+        # Register message handler BEFORE starting client
+        @app.on_message(filters.all)
+        async def handle_message(client, message):
+            # Skip edited messages
+            if message.edit_date:
+                return
+            await message_handler(client, message)
+        
+        # Start client after handlers are registered
         app.start()
         
         # Cache vault channel on startup to prevent "Peer id invalid" errors
@@ -261,14 +361,6 @@ def main():
             logger.info(f"✓ Vault cached: {vault_chat.title if vault_chat.title else 'Saved Messages'}")
         except Exception as e:
             logger.warning(f"⚠️  Could not cache vault: {e}")
-        
-        # Register message handler for all incoming messages
-        @app.on_message(filters.all)
-        async def handle_message(client, message):
-            # Skip edited messages
-            if message.edit_date:
-                return
-            await message_handler(client, message)
         
         logger.info("👤 Telegram Vault Userbot started successfully!")
         if Config.TARGET_USER_IDS:
