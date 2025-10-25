@@ -61,7 +61,7 @@ async def message_handler(client: Client, message: Message):
     Handle incoming messages and forward if from target user, channel, or anonymous admin
     """
     try:
-        logger.debug(f"🔍 Checking message {message.id} from chat {message.chat.id}")
+        logger.info(f"🔍 Checking message {message.id} from chat {message.chat.id}")
         should_forward = False
         source_info = ""
         
@@ -334,17 +334,7 @@ def main():
                     f.write(session_data)
                 logger.info(f"✓ Session restored from {len(session_parts)} chunks")
             except Exception as e:
-                elif "MESSAGE_ID_INVALID" in str(forward_error):
-                    text = msg.text or msg.caption or "[Media - message id invalid]"
-                    await client.send_message(
-                        vault_id,
-                        f"📋 From: {chat.title}\n"
-                        f"🆔 Channel: {channel_id} | Msg: {msg.id}\n"
-                        f"📅 {msg.date}\n\n{text}"
-                    )
-                    logger.info(
-                        f"✅ [POLL] Copied message {msg.id} from {chat.title} (MESSAGE_ID_INVALID)"
-                    )
+                logger.error(f"Error restoring session: {str(e)}")
         else:
             # Try single SESSION_STRING (for backwards compatibility)
             session_base64 = os.environ.get('SESSION_STRING')
