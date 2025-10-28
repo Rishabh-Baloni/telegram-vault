@@ -9,19 +9,10 @@ def main():
     Launch the userbot
     """
     try:
-        # Validate configuration first
-        Config.validate()
-        
         print("👤 Starting Telegram Vault Userbot...")
         import userbot
         userbot.main()
             
-    except ValueError as e:
-        print(f"❌ Configuration Error:")
-        print(f"   {str(e)}")
-        print()
-        print("📝 Please check your .env file")
-        sys.exit(1)
     except KeyboardInterrupt:
         print("\n\n⚠️  Stopped by user")
         sys.exit(0)

@@ -3,12 +3,11 @@ venv/
 env/
 ENV/
 
-# Environment variables
-.env
-
 # Session files (IMPORTANT - don't commit these!)
 *.session
 *.session-journal
+vault_userbot.session*
+TelegramVault.session*
 
 # Personal/Sensitive files
 RULES.txt
@@ -17,6 +16,11 @@ RENDER_ENV_VARIABLES.txt
 SESSION_PART*.txt
 SESSION_STRING.txt
 ALL_SESSIONS.txt
+
+# Private vault data
+vault_*
+private_*
+config_backup*
 
 # Python
 __pycache__/

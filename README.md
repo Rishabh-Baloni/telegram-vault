@@ -16,9 +16,8 @@ Automatically collects and forwards messages from specific users and channels to
 - Python 3.8+
 - Telegram API credentials (from [my.telegram.org/apps](https://my.telegram.org/apps))
 - Your phone number
-- Target User IDs (optional)
-- Target Channel/Group IDs (optional)
 - Vault Channel/Chat ID
+- Configuration via Telegram pinned message
 
 ## 🚀 Quick Setup
 
@@ -50,21 +49,9 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 4. Configure Environment
+### 4. Configure via Environment Variables
 
-Copy `.env.example` to `.env`:
-
-```powershell
-# Windows
-Copy-Item .env.example .env
-```
-
-```bash
-# Linux/Mac
-cp .env.example .env
-```
-
-Edit `.env` with your values:
+Set these environment variables (for deployment platforms):
 
 ```properties
 # API Credentials from my.telegram.org/apps
@@ -74,16 +61,29 @@ PHONE_NUMBER=+1234567890
 
 # Vault channel to forward messages to
 VAULT_CHAT_ID=-1003224847847
-
-# Target users to monitor (comma-separated)
-TARGET_USER_ID=123456789,987654321
-
-# Target channels/groups to monitor (comma-separated)
-# Include -100 prefix for supergroups/channels
-TARGET_CHANNELS=-1001234567890,-1009876543210
 ```
 
-### 5. Get Chat IDs
+### 5. Configure Targets via Pinned Message
+
+Create a pinned message in your vault channel with this format:
+
+```
+🎯 USERBOT TARGETS
+
+👤 USERS:
+123456789
+987654321
+
+📢 CHANNELS:
+-1001234567890
+-1002209287228
+
+👥 GROUPS:
+-1001111111111
+-1002222222222
+```
+
+### 6. Get Chat IDs
 
 **For User IDs:**
 - Forward a message from the user to [@userinfobot](https://t.me/userinfobot)
@@ -100,7 +100,7 @@ TARGET_CHANNELS=-1001234567890,-1009876543210
 - Get the ID using [@userinfobot](https://t.me/userinfobot)
 - Use format: `-1003224847847`
 
-### 6. Run the Userbot
+### 7. Run the Userbot
 
 ```bash
 python run.py
@@ -116,30 +116,54 @@ The session will be saved and you won't need to login again.
 
 ### Track Multiple Users
 
-```properties
-TARGET_USER_ID=123456789,987654321,555666777
+Update your pinned message:
+```
+🎯 USERBOT TARGETS
+
+👤 USERS:
+123456789
+987654321
+555666777
 ```
 
 ### Track Channels and Groups
 
-```properties
-# Format: -100XXXXXXXXXX (add -100 prefix)
-TARGET_CHANNELS=-1001234567890,-1002209287228
+Update your pinned message:
+```
+🎯 USERBOT TARGETS
+
+📢 CHANNELS:
+-1001234567890
+-1002209287228
+
+👥 GROUPS:
+-1001111111111
 ```
 
 ### Track Both Users and Channels
 
-```properties
-TARGET_USER_ID=123456789,987654321
-TARGET_CHANNELS=-1001234567890,-1002209287228
+Update your pinned message:
+```
+🎯 USERBOT TARGETS
+
+👤 USERS:
+123456789
+987654321
+
+📢 CHANNELS:
+-1001234567890
+-1002209287228
 ```
 
 ### Anonymous Admin Messages
 
-The userbot automatically captures messages from anonymous admins in monitored groups. Just add the group ID to `TARGET_CHANNELS`:
+The userbot automatically captures messages from anonymous admins in monitored groups. Just add the group ID to your pinned message:
 
-```properties
-TARGET_CHANNELS=-1002209287228
+```
+🎯 USERBOT TARGETS
+
+👥 GROUPS:
+-1002209287228
 ```
 
 ## 🔧 Troubleshooting
@@ -158,11 +182,12 @@ TARGET_CHANNELS=-1002209287228
 2. Is the user ID correct? (use [@userinfobot](https://t.me/userinfobot))
 3. For channels/groups, did you add `-100` prefix?
 4. Did you interact with the vault channel first?
+5. Is your pinned message formatted correctly?
 
 ### Anonymous Admin Messages Not Working
 
 **Verify:**
-1. Group ID has `-100` prefix in `TARGET_CHANNELS`
+1. Group ID has `-100` prefix in pinned message under 👥 GROUPS
 2. You have admin rights in the group
 3. The group allows anonymous posting
 4. Check logs for "ANONYMOUS MESSAGE DETECTED"
@@ -200,14 +225,15 @@ See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed step-by-step instructions.
 1. Push your code to GitHub (private repo)
 2. Sign up on Railway.app with GitHub
 3. Deploy from your repository
-4. Add environment variables from your `.env`
-5. Done! Bot runs 24/7 for FREE
+4. Add environment variables (API_ID, API_HASH, PHONE_NUMBER, VAULT_CHAT_ID)
+5. Create pinned message in vault channel with targets
+6. Done! Bot runs 24/7 for FREE
 
 **Detailed guide:** [DEPLOYMENT.md](DEPLOYMENT.md)
 
 ## 🛡️ Security Notes
 
-1. **Never share your `.env` file** - it contains sensitive credentials
+1. **Never share your API credentials** - keep them secure
 2. **Use 2FA** on your Telegram account
 3. **Monitor session** - watch for unusual activity
 4. **Respect Privacy** - only monitor content you have permission to access
@@ -229,8 +255,6 @@ telegram-vault/
 ├── userbot.py          # Userbot implementation
 ├── config.py           # Configuration loader
 ├── requirements.txt    # Python dependencies
-├── .env               # Your configuration (create from .env.example)
-├── .env.example       # Configuration template
 ├── RULES.txt          # Project rules
 └── README.md          # This file
 ```
